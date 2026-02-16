@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Pencil, Trash2, Wallet, TrendingUp, TrendingDown, Landmark } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Plus, Pencil, Trash2, Wallet, TrendingUp, TrendingDown, Landmark, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,38 +39,55 @@ const typeConfig: Record<CategoryType, { label: string; color: string; icon: Rea
   LIABILITY: { label: "Liability", color: "bg-orange-100 text-orange-700", icon: Landmark },
 }
 
-// Mock data — will be replaced with API calls
-const initialCategories: Category[] = [
-  { id: "1", name: "Para ne Banke", type: "ASSET" },
-  { id: "2", name: "Para Cash", type: "ASSET" },
-  { id: "3", name: "Qiraja", type: "EXPENSE" },
-  { id: "4", name: "Rryma", type: "EXPENSE" },
-  { id: "5", name: "Ushqimi", type: "EXPENSE" },
-  { id: "6", name: "Paga", type: "REVENUE" },
-]
-
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>(initialCategories)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [name, setName] = useState("")
   const [type, setType] = useState<CategoryType>("EXPENSE")
 
-  const handleSave = () => {
+  const fetchCategories = useCallback(async () => {
+    const res = await fetch("/api/categories")
+    if (res.ok) {
+      const data = await res.json()
+      setCategories(data)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    fetchCategories()
+  }, [fetchCategories])
+
+  const handleSave = async () => {
     if (!name.trim()) return
+    setSaving(true)
 
     if (editingCategory) {
-      setCategories(prev =>
-        prev.map(c => c.id === editingCategory.id ? { ...c, name, type } : c)
-      )
+      const res = await fetch(`/api/categories/${editingCategory.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type }),
+      })
+      if (res.ok) {
+        await fetchCategories()
+        resetForm()
+      }
     } else {
-      setCategories(prev => [
-        ...prev,
-        { id: Date.now().toString(), name, type },
-      ])
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type }),
+      })
+      if (res.ok) {
+        await fetchCategories()
+        resetForm()
+      }
     }
 
-    resetForm()
+    setSaving(false)
   }
 
   const handleEdit = (category: Category) => {
@@ -80,8 +97,14 @@ export default function CategoriesPage() {
     setDialogOpen(true)
   }
 
-  const handleDelete = (id: string) => {
-    setCategories(prev => prev.filter(c => c.id !== id))
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/categories/${id}`, { method: "DELETE" })
+    if (res.ok) {
+      await fetchCategories()
+    } else {
+      const data = await res.json()
+      alert(data.error || "Failed to delete")
+    }
   }
 
   const resetForm = () => {
@@ -98,6 +121,14 @@ export default function CategoriesPage() {
     },
     { ASSET: [], LIABILITY: [], REVENUE: [], EXPENSE: [] }
   )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -153,8 +184,12 @@ export default function CategoriesPage() {
 
             <DialogFooter>
               <Button variant="outline" onClick={resetForm}>Cancel</Button>
-              <Button onClick={handleSave} disabled={!name.trim()}>
-                {editingCategory ? "Save Changes" : "Create Category"}
+              <Button onClick={handleSave} disabled={!name.trim() || saving}>
+                {saving ? (
+                  <><Loader2 className="size-4 animate-spin" /> Saving...</>
+                ) : (
+                  editingCategory ? "Save Changes" : "Create Category"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

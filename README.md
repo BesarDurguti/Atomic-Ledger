@@ -74,10 +74,24 @@ git clone <repo-url>
 cd atomic-ledger
 npm install
 npx prisma db push
+npx prisma generate
+```
+
+Seed the database with a default user and categories:
+
+```bash
+npx tsx prisma/seed.ts "Your Name" "your@email.com" "yourpassword"
+```
+
+This creates a user and 9 default categories (Para ne Banke, Para Cash, Qiraja, Rryma, Ushqimi, Benzina, Paga, Freelance, Kredia e Bankes).
+
+Then start the dev server:
+
+```bash
 npm run dev
 ```
 
-Add your OpenAI API key to `.env.local`:
+Add your OpenAI API key to `.env`:
 ```
 OPENAI_API_KEY=your-key-here
 ```
