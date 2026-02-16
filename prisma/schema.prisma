@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// The 4 fixed types: ASSET, LIABILITY, REVENUE, EXPENSE
+// Users create categories under these types
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // ASSET | LIABILITY | REVENUE | EXPENSE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactionsFrom Transaction[] @relation("FromCategory")
+  transactionsTo   Transaction[] @relation("ToCategory")
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  description    String
+  amount         Float
+  fromCategoryId String
+  toCategoryId   String
+  date           DateTime
+  aiGenerated    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  fromCategory Category @relation("FromCategory", fields: [fromCategoryId], references: [id])
+  toCategory   Category @relation("ToCategory", fields: [toCategoryId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  role      String   // USER | ASSISTANT
+  content   String
+  createdAt DateTime @default(now())
+}
