@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getSessionUserId } from "@/lib/auth"
 import { createCategorySchema } from "@/lib/validation"
+import { invalidateCache } from "@/lib/ai-tools"
 
 // GET /api/categories — list all categories for the logged-in user
 export async function GET() {
@@ -43,5 +44,6 @@ export async function POST(request: Request) {
     },
   })
 
+  invalidateCache(userId)
   return NextResponse.json(category, { status: 201 })
 }

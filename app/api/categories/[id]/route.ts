@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getSessionUserId } from "@/lib/auth"
 import { updateCategorySchema } from "@/lib/validation"
+import { invalidateCache } from "@/lib/ai-tools"
 
 // PUT /api/categories/[id] — update a category
 export async function PUT(
@@ -37,6 +38,7 @@ export async function PUT(
     data: result.data,
   })
 
+  invalidateCache(userId)
   return NextResponse.json(category)
 }
 
@@ -65,5 +67,6 @@ export async function DELETE(
     data: { deletedAt: new Date() },
   })
 
+  invalidateCache(userId)
   return NextResponse.json({ success: true })
 }
