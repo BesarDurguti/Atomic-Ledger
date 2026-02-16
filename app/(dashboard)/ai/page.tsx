@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Send, Sparkles, User, Loader2 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Message {
   id: string
@@ -154,7 +155,13 @@ export default function AIPage() {
                     }`}
                   >
                     {message.content ? (
-                      <div className="whitespace-pre-wrap">{message.content}</div>
+                      message.role === "assistant" ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2 prose-pre:bg-background/50 prose-pre:rounded-md prose-code:text-xs prose-code:before:content-none prose-code:after:content-none">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap">{message.content}</div>
+                      )
                     ) : (
                       <Loader2 className="size-4 animate-spin text-muted-foreground" />
                     )}
@@ -175,16 +182,23 @@ export default function AIPage() {
           <div className="border-t p-4">
             <form
               onSubmit={(e) => { e.preventDefault(); handleSend() }}
-              className="flex gap-2"
+              className="flex gap-2 items-end"
             >
-              <Input
+              <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend()
+                  }
+                }}
                 placeholder="Ask about your finances..."
                 disabled={isLoading}
-                className="flex-1"
+                className="flex-1 min-h-[40px] max-h-[120px] resize-none"
+                rows={1}
               />
-              <Button type="submit" disabled={!input.trim() || isLoading}>
+              <Button type="submit" disabled={!input.trim() || isLoading} className="shrink-0">
                 <Send className="size-4" />
               </Button>
             </form>

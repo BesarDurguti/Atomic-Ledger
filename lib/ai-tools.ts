@@ -111,6 +111,52 @@ export const tools: Tool[] = [
         },
       },
       {
+        name: "delete_category",
+        description:
+          "Delete (soft delete) a financial category by name. Use this when the user asks to remove or delete a category.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            name: {
+              type: Type.STRING,
+              description: "The exact name of the category to delete",
+            },
+          },
+          required: ["name"],
+        },
+      },
+      {
+        name: "create_transaction",
+        description:
+          "Create a new transaction. Every transaction moves money FROM one category TO another (double-entry). Use this when the user describes a payment, expense, income, or any money movement.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            description: {
+              type: Type.STRING,
+              description: "A short description of the transaction (e.g., 'Paid rent for February')",
+            },
+            amount: {
+              type: Type.NUMBER,
+              description: "The amount in euros",
+            },
+            fromCategory: {
+              type: Type.STRING,
+              description: "The name of the source category (where money comes FROM)",
+            },
+            toCategory: {
+              type: Type.STRING,
+              description: "The name of the destination category (where money goes TO)",
+            },
+            date: {
+              type: Type.STRING,
+              description: "The date of the transaction in YYYY-MM-DD format. Use today's date if not specified.",
+            },
+          },
+          required: ["description", "amount", "fromCategory", "toCategory", "date"],
+        },
+      },
+      {
         name: "get_financial_summary",
         description:
           "Get the user's complete and up-to-date financial data including all categories, transactions, income, expenses, and spending breakdown. Use this when the user asks about their finances, spending, income, or wants analysis.",
@@ -156,6 +202,91 @@ export async function executeTool(
           id: category.id,
           name: category.name,
           type: category.type,
+        },
+      });
+    }
+
+    case "delete_category": {
+      const { name: catName } = args;
+
+      const existing = await prisma.category.findFirst({
+        where: { userId, name: catName, deletedAt: null },
+      });
+      if (!existing) {
+        return JSON.stringify({
+          success: false,
+          error: `Category "${catName}" not found.`,
+        });
+      }
+
+      await prisma.category.update({
+        where: { id: existing.id },
+        data: { deletedAt: new Date() },
+      });
+
+      invalidateCache(userId);
+
+      return JSON.stringify({
+        success: true,
+        deleted: { name: existing.name, type: existing.type },
+      });
+    }
+
+    case "create_transaction": {
+      const { description: desc, amount, fromCategory: fromName, toCategory: toName, date } = args;
+
+      // Find categories by name
+      const [fromCat, toCat] = await Promise.all([
+        prisma.category.findFirst({
+          where: { userId, name: fromName, deletedAt: null },
+        }),
+        prisma.category.findFirst({
+          where: { userId, name: toName, deletedAt: null },
+        }),
+      ]);
+
+      if (!fromCat) {
+        return JSON.stringify({
+          success: false,
+          error: `Category "${fromName}" not found. Available categories: ${(await prisma.category.findMany({ where: { userId, deletedAt: null }, select: { name: true } })).map(c => c.name).join(", ")}`,
+        });
+      }
+      if (!toCat) {
+        return JSON.stringify({
+          success: false,
+          error: `Category "${toName}" not found. Available categories: ${(await prisma.category.findMany({ where: { userId, deletedAt: null }, select: { name: true } })).map(c => c.name).join(", ")}`,
+        });
+      }
+      if (fromCat.id === toCat.id) {
+        return JSON.stringify({
+          success: false,
+          error: "From and To categories must be different.",
+        });
+      }
+
+      const transaction = await prisma.transaction.create({
+        data: {
+          description: desc,
+          amount: parseFloat(amount),
+          fromCategoryId: fromCat.id,
+          toCategoryId: toCat.id,
+          date: new Date(date),
+          aiGenerated: true,
+          userId,
+        },
+      });
+
+      invalidateCache(userId);
+
+      return JSON.stringify({
+        success: true,
+        transaction: {
+          id: transaction.id,
+          description: transaction.description,
+          amount: transaction.amount,
+          from: fromName,
+          to: toName,
+          date,
         },
       });
     }

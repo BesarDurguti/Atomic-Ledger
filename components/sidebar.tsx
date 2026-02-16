@@ -7,7 +7,7 @@ import { LayoutDashboard, BookOpen, ListTree, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Categories", href: "/categories", icon: ListTree },
   { label: "Transactions", href: "/transactions", icon: BookOpen },
   { label: "AI Assistant", href: "/ai", icon: Sparkles },
@@ -19,7 +19,7 @@ export function Sidebar({ className }: { className?: string }) {
   return (
     <aside className={cn("flex h-full w-64 flex-col border-r bg-sidebar", className)}>
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
+        <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
           <Image src="/icon-no-bg.png" alt="Atomic Ledger" width={28} height={28} />
           <span>Atomic Ledger</span>
         </Link>

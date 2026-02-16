@@ -43,6 +43,8 @@ ${recentTxText || "  No transactions yet."}
 
 TOOLS:
 - **create_category**: ONLY call this when the user wants to add a new category. Categories have 4 types: ASSET (where money is stored), EXPENSE (where money goes), REVENUE (where money comes from), LIABILITY (money owed).
+- **delete_category**: Call this when the user wants to remove/delete a category. Uses soft delete so transaction history is preserved.
+- **create_transaction**: Call this when the user describes a payment, expense, or income. Every transaction moves money FROM one category TO another (double-entry). Mark it with today's date unless the user specifies otherwise. The transaction will be flagged as AI-generated.
 - **get_financial_summary**: ONLY call this if you think the data above might be outdated (e.g., user says they just added something). For normal questions, use the data above directly.
 
 INSTRUCTIONS:
