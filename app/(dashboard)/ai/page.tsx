@@ -13,43 +13,112 @@ interface Message {
   content: string
 }
 
+const WELCOME_MESSAGE: Message = {
+  id: "welcome",
+  role: "assistant",
+  content: "Hi! I'm your AI finance assistant. I know everything about your transactions and categories.\n\nYou can ask me things like:\n- \"Sa kam shpenzu kete muaj?\"\n- \"Which category do I spend the most on?\"\n- \"Give me a summary of my finances\"\n\nTry it out!",
+}
+
 export default function AIPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "Hi! I'm your AI finance assistant. I know everything about your transactions and categories.\n\nYou can ask me things like:\n- \"Sa kam shpenzu kete muaj?\"\n- \"Which category do I spend the most on?\"\n- \"Give me a summary of my finances\"\n\nTry it out!",
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [initialLoad, setInitialLoad] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollRafRef = useRef<number | null>(null)
 
-  // Load chat history on mount
-  const loadHistory = useCallback(async () => {
-    const res = await fetch("/api/chat/history")
-    if (res.ok) {
-      const data = await res.json()
-      if (data.length > 0) {
-        setMessages(prev => [
-          prev[0],
-          ...data.map((msg: { id: string; role: string; content: string }) => ({
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior })
+      scrollRafRef.current = null
+    })
+  }, [])
+
+  // Load older messages
+  const loadMore = useCallback(async () => {
+    if (!hasMore || !nextCursor || isLoadingMore) return
+
+    setIsLoadingMore(true)
+    const scrollContainer = scrollContainerRef.current
+    const previousScrollHeight = scrollContainer?.scrollHeight ?? 0
+
+    try {
+      const res = await fetch(`/api/chat/history?cursor=${nextCursor}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.messages.length > 0) {
+          const olderMessages: Message[] = data.messages.map(
+            (msg: { id: string; role: string; content: string }) => ({
+              id: msg.id,
+              role: msg.role === "USER" ? "user" : "assistant",
+              content: msg.content,
+            })
+          )
+          setMessages(prev => [prev[0], ...olderMessages, ...prev.slice(1)])
+          setHasMore(data.hasMore)
+          setNextCursor(data.nextCursor)
+
+          // Preserve scroll position after prepending
+          requestAnimationFrame(() => {
+            if (scrollContainer) {
+              scrollContainer.scrollTop =
+                scrollContainer.scrollHeight - previousScrollHeight
+            }
+          })
+        }
+      }
+    } catch {
+      // ignore fetch errors
+    }
+    setIsLoadingMore(false)
+  }, [hasMore, nextCursor, isLoadingMore])
+
+  // Load initial messages on mount
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/chat/history")
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (cancelled || !data?.messages?.length) {
+          if (!cancelled) setInitialLoad(false)
+          return
+        }
+        setMessages([
+          WELCOME_MESSAGE,
+          ...data.messages.map((msg: { id: string; role: string; content: string }) => ({
             id: msg.id,
             role: msg.role === "USER" ? "user" : "assistant",
             content: msg.content,
           })),
         ])
-      }
-    }
+        setHasMore(data.hasMore)
+        setNextCursor(data.nextCursor)
+        setInitialLoad(false)
+      })
+      .catch(() => { if (!cancelled) setInitialLoad(false) })
+    return () => { cancelled = true }
   }, [])
 
+  // Scroll to bottom after initial load
   useEffect(() => {
-    loadHistory()
-  }, [loadHistory])
+    if (!initialLoad) {
+      scrollToBottom("instant")
+    }
+  }, [initialLoad, scrollToBottom])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  // Detect scroll to top for loading more
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    if (container.scrollTop < 60 && hasMore && !isLoadingMore) {
+      loadMore()
+    }
+  }, [hasMore, isLoadingMore, loadMore])
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -64,6 +133,7 @@ export default function AIPage() {
     const currentInput = input
     setInput("")
     setIsLoading(true)
+    scrollToBottom()
 
     // Build history from messages (excluding welcome)
     const history = messages
@@ -110,6 +180,7 @@ export default function AIPage() {
             : m
           )
         )
+        scrollToBottom()
       }
     } catch {
       setMessages(prev =>
@@ -134,7 +205,17 @@ export default function AIPage() {
 
       <Card className="flex-1 overflow-hidden">
         <CardContent className="flex h-full flex-col p-0">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto p-4 space-y-4"
+          >
+            {isLoadingMore && (
+              <div className="flex justify-center py-2">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+
             {messages.map((message) => (
               <div
                 key={message.id}

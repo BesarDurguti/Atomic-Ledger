@@ -139,12 +139,12 @@ export async function POST(request: Request) {
     // Now we have a text response
     const finalText = response.text ?? "";
 
-    // Save messages to database
-    await prisma.message.createMany({
-      data: [
-        { role: "USER", content: message, userId },
-        { role: "ASSISTANT", content: finalText, userId },
-      ],
+    // Save messages to database (sequentially to preserve ordering)
+    await prisma.message.create({
+      data: { role: "USER", content: message, userId },
+    });
+    await prisma.message.create({
+      data: { role: "ASSISTANT", content: finalText, userId },
     });
 
     // Stream the text to the client word-by-word for smooth UI
