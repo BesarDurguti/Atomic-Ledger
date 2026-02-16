@@ -1,22 +1,32 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
 }
 
-// The 4 fixed types: ASSET, LIABILITY, REVENUE, EXPENSE
-// Users create categories under these types
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  categories   Category[]
+  transactions Transaction[]
+  messages     Message[]
+}
 
 model Category {
   id        String   @id @default(cuid())
   name      String
-  type      String   // ASSET | LIABILITY | REVENUE | EXPENSE
+  type      String   // ASSET | LIABILITY | REVENUE | EXPENSE (validated via Zod)
+  userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  user             User          @relation(fields: [userId], references: [id])
   transactionsFrom Transaction[] @relation("FromCategory")
   transactionsTo   Transaction[] @relation("ToCategory")
 }
@@ -27,10 +37,12 @@ model Transaction {
   amount         Float
   fromCategoryId String
   toCategoryId   String
+  userId         String
   date           DateTime
   aiGenerated    Boolean  @default(false)
   createdAt      DateTime @default(now())
 
+  user         User     @relation(fields: [userId], references: [id])
   fromCategory Category @relation("FromCategory", fields: [fromCategoryId], references: [id])
   toCategory   Category @relation("ToCategory", fields: [toCategoryId], references: [id])
 }
@@ -39,5 +51,8 @@ model Message {
   id        String   @id @default(cuid())
   role      String   // USER | ASSISTANT
   content   String
+  userId    String
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
