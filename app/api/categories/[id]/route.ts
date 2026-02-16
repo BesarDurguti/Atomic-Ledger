@@ -24,9 +24,9 @@ export async function PUT(
     )
   }
 
-  // Verify category belongs to user
+  // Verify category belongs to user and is not deleted
   const existing = await prisma.category.findFirst({
-    where: { id, userId },
+    where: { id, userId, deletedAt: null },
   })
   if (!existing) {
     return NextResponse.json({ error: "Category not found" }, { status: 404 })
@@ -40,7 +40,7 @@ export async function PUT(
   return NextResponse.json(category)
 }
 
-// DELETE /api/categories/[id] — delete a category (only if no transactions)
+// DELETE /api/categories/[id] — soft delete a category
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -53,30 +53,17 @@ export async function DELETE(
   const { id } = await params
 
   const existing = await prisma.category.findFirst({
-    where: { id, userId },
-    include: {
-      _count: {
-        select: {
-          transactionsFrom: true,
-          transactionsTo: true,
-        },
-      },
-    },
+    where: { id, userId, deletedAt: null },
   })
 
   if (!existing) {
     return NextResponse.json({ error: "Category not found" }, { status: 404 })
   }
 
-  const totalTransactions = existing._count.transactionsFrom + existing._count.transactionsTo
-  if (totalTransactions > 0) {
-    return NextResponse.json(
-      { error: `Cannot delete category with ${totalTransactions} transaction(s)` },
-      { status: 400 }
-    )
-  }
-
-  await prisma.category.delete({ where: { id } })
+  await prisma.category.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  })
 
   return NextResponse.json({ success: true })
 }

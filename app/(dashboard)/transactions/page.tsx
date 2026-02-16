@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, ArrowRight, Trash2 } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Plus, ArrowRight, Trash2, Pencil, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -44,91 +45,111 @@ interface Transaction {
   amount: number
   fromCategoryId: string
   toCategoryId: string
+  fromCategory: Category
+  toCategory: Category
   date: string
   aiGenerated: boolean
 }
 
-// Mock data — will be replaced with API calls
-const mockCategories: Category[] = [
-  { id: "1", name: "Para ne Banke", type: "ASSET" },
-  { id: "2", name: "Para Cash", type: "ASSET" },
-  { id: "3", name: "Qiraja", type: "EXPENSE" },
-  { id: "4", name: "Rryma", type: "EXPENSE" },
-  { id: "5", name: "Ushqimi", type: "EXPENSE" },
-  { id: "6", name: "Paga", type: "REVENUE" },
-]
-
-const mockTransactions: Transaction[] = [
-  {
-    id: "1",
-    description: "Pagova qiranë per shkurt",
-    amount: 350,
-    fromCategoryId: "1",
-    toCategoryId: "3",
-    date: "2026-02-01",
-    aiGenerated: false,
-  },
-  {
-    id: "2",
-    description: "Bleva ushqim ne market",
-    amount: 45.50,
-    fromCategoryId: "2",
-    toCategoryId: "5",
-    date: "2026-02-03",
-    aiGenerated: false,
-  },
-  {
-    id: "3",
-    description: "Mora pagën per janar",
-    amount: 1200,
-    fromCategoryId: "6",
-    toCategoryId: "1",
-    date: "2026-02-05",
-    aiGenerated: true,
-  },
-  {
-    id: "4",
-    description: "Pagova rrymën",
-    amount: 42,
-    fromCategoryId: "1",
-    toCategoryId: "4",
-    date: "2026-02-10",
-    aiGenerated: true,
-  },
-]
-
-function getCategoryName(id: string) {
-  return mockCategories.find(c => c.id === id)?.name ?? "Unknown"
-}
-
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [description, setDescription] = useState("")
   const [amount, setAmount] = useState("")
   const [fromId, setFromId] = useState("")
   const [toId, setToId] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
 
-  const handleSave = () => {
-    if (!description.trim() || !amount || !fromId || !toId || fromId === toId) return
+  const fetchTransactions = useCallback(async () => {
+    const res = await fetch("/api/transactions")
+    if (res.ok) {
+      const data = await res.json()
+      setTransactions(data)
+    }
+  }, [])
 
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
+  const fetchCategories = useCallback(async () => {
+    const res = await fetch("/api/categories")
+    if (res.ok) {
+      const data = await res.json()
+      setCategories(data)
+    }
+  }, [])
+
+  useEffect(() => {
+    Promise.all([fetchTransactions(), fetchCategories()]).then(() => {
+      setLoading(false)
+    })
+  }, [fetchTransactions, fetchCategories])
+
+  const handleSave = async () => {
+    if (!description.trim() || !amount || !fromId || !toId || fromId === toId) return
+    setSaving(true)
+
+    const payload = {
       description,
       amount: parseFloat(amount),
       fromCategoryId: fromId,
       toCategoryId: toId,
       date,
-      aiGenerated: false,
     }
 
-    setTransactions(prev => [newTransaction, ...prev])
-    resetForm()
+    if (editingTransaction) {
+      const res = await fetch(`/api/transactions/${editingTransaction.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        await fetchTransactions()
+        resetForm()
+        toast.success("Transaction updated")
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "Failed to update transaction")
+      }
+    } else {
+      const res = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        await fetchTransactions()
+        resetForm()
+        toast.success("Transaction created")
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "Failed to create transaction")
+      }
+    }
+
+    setSaving(false)
   }
 
-  const handleDelete = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id))
+  const handleEdit = (transaction: Transaction) => {
+    setEditingTransaction(transaction)
+    setDescription(transaction.description)
+    setAmount(transaction.amount.toString())
+    setFromId(transaction.fromCategoryId)
+    setToId(transaction.toCategoryId)
+    setDate(new Date(transaction.date).toISOString().split("T")[0])
+    setDialogOpen(true)
+  }
+
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" })
+    if (res.ok) {
+      await fetchTransactions()
+      toast.success("Transaction deleted")
+    } else {
+      const data = await res.json()
+      toast.error(data.error || "Failed to delete transaction")
+    }
   }
 
   const resetForm = () => {
@@ -137,15 +158,21 @@ export default function TransactionsPage() {
     setFromId("")
     setToId("")
     setDate(new Date().toISOString().split("T")[0])
+    setEditingTransaction(null)
     setDialogOpen(false)
   }
 
   const totalSpent = transactions
-    .filter(t => {
-      const toCat = mockCategories.find(c => c.id === t.toCategoryId)
-      return toCat?.type === "EXPENSE"
-    })
+    .filter(t => t.toCategory?.type === "EXPENSE")
     .reduce((sum, t) => sum + t.amount, 0)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -166,9 +193,9 @@ export default function TransactionsPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>New Transaction</DialogTitle>
+              <DialogTitle>{editingTransaction ? "Edit Transaction" : "New Transaction"}</DialogTitle>
               <DialogDescription>
-                Record a new transaction. Money moves from one category to another.
+                {editingTransaction ? "Update the transaction details." : "Record a new transaction. Money moves from one category to another."}
               </DialogDescription>
             </DialogHeader>
 
@@ -204,7 +231,7 @@ export default function TransactionsPage() {
                       <SelectValue placeholder="Source" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockCategories.map(c => (
+                      {categories.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -220,7 +247,7 @@ export default function TransactionsPage() {
                       <SelectValue placeholder="Destination" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockCategories.map(c => (
+                      {categories.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -247,9 +274,13 @@ export default function TransactionsPage() {
               <Button variant="outline" onClick={resetForm}>Cancel</Button>
               <Button
                 onClick={handleSave}
-                disabled={!description.trim() || !amount || !fromId || !toId || fromId === toId}
+                disabled={!description.trim() || !amount || !fromId || !toId || fromId === toId || saving}
               >
-                Post Transaction
+                {saving ? (
+                  <><Loader2 className="size-4 animate-spin" /> Saving...</>
+                ) : (
+                  editingTransaction ? "Save Changes" : "Post Transaction"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -307,7 +338,9 @@ export default function TransactionsPage() {
               ) : (
                 transactions.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell className="text-muted-foreground text-sm">{t.date}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {new Date(t.date).toLocaleDateString()}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm">{t.description}</span>
@@ -318,20 +351,29 @@ export default function TransactionsPage() {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">
-                        {getCategoryName(t.fromCategoryId)}
+                        {t.fromCategory?.name ?? "Unknown"}
                         <ArrowRight className="inline size-3 mx-1 text-muted-foreground" />
-                        {getCategoryName(t.toCategoryId)}
+                        {t.toCategory?.name ?? "Unknown"}
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-medium">€{t.amount.toFixed(2)}</TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => handleDelete(t.id)}
-                      >
-                        <Trash2 className="size-3" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => handleEdit(t)}
+                        >
+                          <Pencil className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => handleDelete(t.id)}
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

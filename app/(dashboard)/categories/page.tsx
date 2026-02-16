@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Wallet, TrendingUp, TrendingDown, Landmark, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -74,6 +75,10 @@ export default function CategoriesPage() {
       if (res.ok) {
         await fetchCategories()
         resetForm()
+        toast.success("Category updated")
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "Failed to update category")
       }
     } else {
       const res = await fetch("/api/categories", {
@@ -84,6 +89,10 @@ export default function CategoriesPage() {
       if (res.ok) {
         await fetchCategories()
         resetForm()
+        toast.success("Category created")
+      } else {
+        const data = await res.json()
+        toast.error(data.error || "Failed to create category")
       }
     }
 
@@ -101,9 +110,10 @@ export default function CategoriesPage() {
     const res = await fetch(`/api/categories/${id}`, { method: "DELETE" })
     if (res.ok) {
       await fetchCategories()
+      toast.success("Category deleted")
     } else {
       const data = await res.json()
-      alert(data.error || "Failed to delete")
+      toast.error(data.error || "Failed to delete category")
     }
   }
 

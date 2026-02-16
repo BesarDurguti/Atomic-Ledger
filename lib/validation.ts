@@ -29,3 +29,13 @@ export const createTransactionSchema = z.object({
 }).refine(data => data.fromCategoryId !== data.toCategoryId, {
   message: "From and To categories must be different",
 })
+
+export const updateTransactionSchema = z.object({
+  description: z.string().min(1, "Description is required").max(500),
+  amount: z.number().positive("Amount must be greater than 0"),
+  fromCategoryId: z.string().min(1, "From category is required"),
+  toCategoryId: z.string().min(1, "To category is required"),
+  date: z.string().min(1, "Date is required"),
+}).refine(data => data.fromCategoryId !== data.toCategoryId, {
+  message: "From and To categories must be different",
+})
